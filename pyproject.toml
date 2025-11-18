@@ -129,10 +129,12 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [project.entry-points.'nomad.plugin']
-parser_entry_point = "nomad_training_resources.parsers:parser_entry_point"
+training_resources = "nomad_training_resources.apps:training_resources_app_entry_point"
+training_jsonld_parser = "nomad_training_resources.parsers:training_jsonld_parser"
+parser_entry_point = "nomad_training_resources.parsers:training_jsonld_parser"
 schema_package_entry_point = "nomad_training_resources.schema_packages:schema_package_entry_point"
 normalizer_entry_point = "nomad_training_resources.normalizers:normalizer_entry_point"
-app_entry_point = "nomad_training_resources.apps:app_entry_point"
+
 
 
 [tool.cruft]
