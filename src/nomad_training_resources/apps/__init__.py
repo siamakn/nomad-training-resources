@@ -16,7 +16,7 @@ from nomad.config.models.ui import (
 
 SCHEMA = "nomad_training_resources.schema_packages.schema_package.TrainingResource"
 
-# --- Index-friendly search quantities (mirror subsections) ---
+# Search quantities (index-friendly mirror subsections)
 Q_SUBJECT = f"data.subject_terms.value#{SCHEMA}"
 Q_KEYWORD = f"data.keyword_terms.value#{SCHEMA}"
 Q_INSTRUCTIONAL_METHOD = f"data.instructional_method_terms.value#{SCHEMA}"
@@ -26,6 +26,7 @@ Q_FORMAT = f"data.format_terms.value#{SCHEMA}"
 Q_LICENSE = f"data.license_terms.value#{SCHEMA}"
 
 Q_TITLE = f"data.title#{SCHEMA}"
+Q_IDENTIFIER = f"data.identifier#{SCHEMA}"
 Q_DATE_CREATED = f"data.date_created#{SCHEMA}"
 Q_DATE_MODIFIED = f"data.date_modified#{SCHEMA}"
 
@@ -40,16 +41,13 @@ training_resources_app = App(
         "TrainingResource schema. Use the filters and dashboard to find relevant "
         "tutorials, videos, examples, and documentation."
     ),
-
     filters_locked={
         "section_defs.definition_qualified_name": [SCHEMA],
     },
-
-    # IMPORTANT: only include quantities that are actually indexable
-    # (i.e. the mirror fields, not the list-quantities like data.subject, data.keyword, ...)
     search_quantities=SearchQuantities(
         include=[
             Q_TITLE,
+            Q_IDENTIFIER,
             Q_SUBJECT,
             Q_KEYWORD,
             Q_INSTRUCTIONAL_METHOD,
@@ -62,9 +60,9 @@ training_resources_app = App(
             "authors.name",
         ]
     ),
-
     columns=[
         Column(quantity=Q_TITLE, label="Title", selected=True),
+        Column(quantity=Q_IDENTIFIER, label="Identifier (URL)", selected=False),
         Column(quantity=Q_SUBJECT, label="Subject", selected=True),
         Column(quantity=Q_KEYWORD, label="Keyword", selected=True),
         Column(quantity=Q_INSTRUCTIONAL_METHOD, label="Instructional method", selected=True),
@@ -76,17 +74,37 @@ training_resources_app = App(
         Column(quantity=Q_DATE_MODIFIED, label="Date modified", selected=False),
         Column(quantity="authors.name", label="Authors", selected=False),
     ],
-
     menu=Menu(
         title="Filters",
         items=[
+            Menu(
+                title="Find",
+                items=[
+                    MenuItemTerms(
+                        search_quantity=Q_IDENTIFIER,
+                        title="Find by URL (Identifier)",
+                        show_input=True,
+                        options=20,
+                    ),
+                ],
+            ),
             Menu(
                 title="Content",
                 items=[
                     MenuItemTerms(search_quantity=Q_SUBJECT, title="Subject", show_input=True, options=20),
                     MenuItemTerms(search_quantity=Q_KEYWORD, title="Keyword", show_input=True, options=20),
-                    MenuItemTerms(search_quantity=Q_INSTRUCTIONAL_METHOD, title="Instructional method", show_input=True, options=10),
-                    MenuItemTerms(search_quantity=Q_EDUCATIONAL_LEVEL, title="Educational level", show_input=True, options=10),
+                    MenuItemTerms(
+                        search_quantity=Q_INSTRUCTIONAL_METHOD,
+                        title="Instructional method",
+                        show_input=True,
+                        options=10,
+                    ),
+                    MenuItemTerms(
+                        search_quantity=Q_EDUCATIONAL_LEVEL,
+                        title="Educational level",
+                        show_input=True,
+                        options=10,
+                    ),
                 ],
             ),
             Menu(
@@ -100,15 +118,24 @@ training_resources_app = App(
             Menu(
                 title="Dates and authors",
                 items=[
-                    MenuItemHistogram(title="Date created", x={"search_quantity": Q_DATE_CREATED}, n_bins=40, autorange=True),
-                    MenuItemHistogram(title="Date modified", x={"search_quantity": Q_DATE_MODIFIED}, n_bins=40, autorange=True),
+                    MenuItemHistogram(
+                        title="Date created",
+                        x={"search_quantity": Q_DATE_CREATED},
+                        n_bins=40,
+                        autorange=True,
+                    ),
+                    MenuItemHistogram(
+                        title="Date modified",
+                        x={"search_quantity": Q_DATE_MODIFIED},
+                        n_bins=40,
+                        autorange=True,
+                    ),
                     MenuItemTerms(search_quantity="authors.name", title="Author", show_input=True, options=20),
                     MenuItemVisibility(title="Visibility"),
                 ],
             ),
         ],
     ),
-
     dashboard=Dashboard(
         widgets=[
             WidgetHistogram(

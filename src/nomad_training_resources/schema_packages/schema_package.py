@@ -17,11 +17,7 @@ configuration = config.get_plugin_entry_point(
 
 m_package = SchemaPackage()
 
-# -----------------------------------------------------------------------------
-# Controlled vocabularies (re-used for both the user-facing lists and the hidden
-# index subsections)
-# -----------------------------------------------------------------------------
-
+# Controlled vocabularies
 INSTRUCTIONAL_METHODS = ["Tutorial", "HowTo", "Explanation", "Reference", "Undefined"]
 EDUCATIONAL_LEVELS = ["Beginner", "Intermediate", "Advanced", "Undefined"]
 LEARNING_RESOURCE_TYPES = [
@@ -63,6 +59,30 @@ SUBJECTS = [
     "Undefined",
 ]
 
+# Relation types and resolution status values
+RELATION_TYPES = [
+    "sameAs",
+    "isPartOf",
+    "hasPart",
+    "isFormatOf",
+    "hasFormat",
+    "isReplacedBy",
+    "replaces",
+    "isReferencedBy",
+    "references",
+    "isBasedOn",
+]
+
+RELATION_STATUS = [
+    "manual_reference",
+    "resolved_from_identifier",
+    "identifier_not_found",
+    "identifier_ambiguous",
+    "identifier_missing",
+    "skipped_client_context",
+    "error",
+]
+
 
 def _unique_clean(values: Optional[Iterable[str]]) -> List[str]:
     """De-dup, strip, drop empty/None; keep order."""
@@ -79,56 +99,192 @@ def _unique_clean(values: Optional[Iterable[str]]) -> List[str]:
     return out
 
 
-# -----------------------------------------------------------------------------
-# Hidden "terms" subsections used for indexing / aggregations in Apps.
-# Each element is scalar => NOMAD search indexing behaves like repeated subsections.
-# -----------------------------------------------------------------------------
+def _normalize_enum_list(values: Optional[Iterable[str]]) -> List[str]:
+    """
+    Enforce:
+      - uniqueness
+      - if empty -> ['Undefined']
+      - if contains anything besides Undefined -> remove Undefined
+    """
+    cleaned = _unique_clean(values)
+    if not cleaned:
+        return ["Undefined"]
+    if "Undefined" in cleaned and len(cleaned) > 1:
+        cleaned = [v for v in cleaned if v != "Undefined"]
+    return cleaned
 
+
+def _normalize_free_list(values: Optional[Iterable[str]]) -> List[str]:
+    """Uniqueness only (no Undefined rule)."""
+    return _unique_clean(values)
+
+
+# Repeated subsections used for indexing list-like values in Apps
 class InstructionalMethodTerm(ArchiveSection):
-    m_def = Section()
+    m_def = Section(a_eln={"hide": ["value"]})
     value = Quantity(type=MEnum(INSTRUCTIONAL_METHODS))
 
 
 class EducationalLevelTerm(ArchiveSection):
-    m_def = Section()
+    m_def = Section(a_eln={"hide": ["value"]})
     value = Quantity(type=MEnum(EDUCATIONAL_LEVELS))
 
 
 class LearningResourceTypeTerm(ArchiveSection):
-    m_def = Section()
+    m_def = Section(a_eln={"hide": ["value"]})
     value = Quantity(type=MEnum(LEARNING_RESOURCE_TYPES))
 
 
 class FormatTerm(ArchiveSection):
-    m_def = Section()
+    m_def = Section(a_eln={"hide": ["value"]})
     value = Quantity(type=MEnum(FORMATS))
 
 
 class LicenseTerm(ArchiveSection):
-    m_def = Section()
+    m_def = Section(a_eln={"hide": ["value"]})
     value = Quantity(type=MEnum(LICENSES))
 
 
 class SubjectTerm(ArchiveSection):
-    m_def = Section()
+    m_def = Section(a_eln={"hide": ["value"]})
     value = Quantity(type=MEnum(SUBJECTS))
 
 
 class KeywordTerm(ArchiveSection):
-    m_def = Section()
+    m_def = Section(a_eln={"hide": ["value"]})
     value = Quantity(type=str)
 
 
-# -----------------------------------------------------------------------------
-# Main schema
-# -----------------------------------------------------------------------------
+class TrainingResourceRelation(ArchiveSection):
+    m_def = Section(
+        label_quantity="relation_type",
+        description=(
+            "Add a relationship to another TrainingResource.\n\n"
+            "Tip: Use the pen to select an existing resource. "
+            "Or paste a URL into Target identifier and click Save to auto-resolve."
+        ),
+        a_display={
+            "order": [
+                "relation_type",
+                "target_resource",
+                "target_identifier",
+                "resolution_status",
+                "resolution_message",
+            ],
+            "editable": {"exclude": ["resolution_status", "resolution_message"]},
+        },
+    )
+
+    relation_type = Quantity(
+        type=MEnum(RELATION_TYPES),
+        a_eln=ELNAnnotation(component=ELNComponentEnum.EnumEditQuantity),
+        description="Select the type of relationship.",
+    )
+
+    target_resource = Quantity(
+        type="TrainingResource",
+        a_eln=ELNAnnotation(
+            component=ELNComponentEnum.ReferenceEditQuantity,
+            showSectionLabel=True,
+        ),
+        description="Select the target TrainingResource using the pen icon.",
+    )
+
+    target_identifier = Quantity(
+        type=str,
+        a_eln=ELNAnnotation(component=ELNComponentEnum.URLEditQuantity),
+        description=(
+            "Optional alternative to the pen: paste the identifier URL of an existing "
+            "TrainingResource here, then click Save. NOMAD will try to resolve it."
+        ),
+    )
+
+    resolution_status = Quantity(
+        type=MEnum(RELATION_STATUS),
+        description="Auto-filled on Save: shows what happened during resolution.",
+    )
+
+    resolution_message = Quantity(
+        type=str,
+        description="Auto-filled on Save: details about resolution result.",
+    )
+
+    def normalize(self, archive: "EntryArchive", logger: "BoundLogger") -> None:
+        super().normalize(archive, logger)
+
+        if self.target_resource is not None:
+            self.resolution_status = "manual_reference"
+            self.resolution_message = "Target resource selected manually."
+            return
+
+        target_id = (self.target_identifier or "").strip()
+        if not target_id:
+            self.resolution_status = "identifier_missing"
+            self.resolution_message = (
+                "No target selected yet. Use the pen or paste an identifier URL and Save."
+            )
+            return
+
+        from nomad.datamodel.context import ClientContext
+
+        if isinstance(archive.m_context, ClientContext):
+            self.resolution_status = "skipped_client_context"
+            self.resolution_message = (
+                "Auto-resolution runs during server-side processing. Click Save and "
+                "check the entry again after processing."
+            )
+            return
+
+        try:
+            from nomad.search import MetadataPagination, search
+
+            schema_qn = "nomad_training_resources.schema_packages.schema_package.TrainingResource"
+            query = {f"data.identifier#{schema_qn}": target_id}
+
+            result = search(
+                owner="visible",
+                query=query,
+                pagination=MetadataPagination(page_size=2),
+                user_id=getattr(archive.metadata.main_author, "user_id", None),
+            )
+
+            total = getattr(result.pagination, "total", 0) or 0
+            if total == 0:
+                self.resolution_status = "identifier_not_found"
+                self.resolution_message = (
+                    "No TrainingResource found with that identifier URL. "
+                    "Either create the missing resource entry, or use the pen to select an entry."
+                )
+                return
+
+            if total > 1:
+                self.resolution_status = "identifier_ambiguous"
+                self.resolution_message = (
+                    "Multiple TrainingResources found with that identifier URL. "
+                    "Please select the correct one with the pen."
+                )
+                return
+
+            hit = result.data[0]
+            upload_id = hit["upload_id"]
+            entry_id = hit["entry_id"]
+
+            m_proxy_value = f"../uploads/{upload_id}/archive/{entry_id}#/data"
+            self.target_resource = m_proxy_value
+
+            self.resolution_status = "resolved_from_identifier"
+            self.resolution_message = f"Resolved identifier to TrainingResource entry_id={entry_id}."
+
+        except Exception as e:
+            logger.warning("relation_identifier_resolution_failed", error=str(e))
+            self.resolution_status = "error"
+            self.resolution_message = f"Resolution failed: {e}"
+
 
 class TrainingResource(Schema):
     m_def = Section(
         a_eln={
             "hide": [
-                "name",
-                # hide the indexing mirrors (they still exist + get indexed)
                 "instructional_method_terms",
                 "educational_level_terms",
                 "learning_resource_type_terms",
@@ -136,17 +292,15 @@ class TrainingResource(Schema):
                 "license_terms",
                 "subject_terms",
                 "keyword_terms",
-                # optional debug/info
                 "message",
             ]
         }
     )
 
-    # --- Internal/identifier-ish ---
     name = Quantity(
         type=str,
         a_eln=ELNAnnotation(component=ELNComponentEnum.StringEditQuantity),
-        description="Hidden: automatically set from identifier, so that entries are unique",
+        description="Human-readable name for this resource (editable).",
     )
     identifier = Quantity(
         type=str,
@@ -154,7 +308,6 @@ class TrainingResource(Schema):
         links=["https://schema.org/identifier"],
     )
 
-    # --- Simple metadata ---
     language = Quantity(
         type=str,
         a_eln=ELNAnnotation(component=ELNComponentEnum.StringEditQuantity),
@@ -172,7 +325,6 @@ class TrainingResource(Schema):
         links=["https://schema.org/dateModified"],
     )
 
-    # --- Multi-value (user-facing) quantities ---
     instructional_method = Quantity(
         type=MEnum(INSTRUCTIONAL_METHODS),
         shape=["*"],
@@ -223,7 +375,6 @@ class TrainingResource(Schema):
         description="Add one or more keywords.",
     )
 
-    # --- Descriptive content ---
     title = Quantity(
         type=str,
         a_eln=ELNAnnotation(component=ELNComponentEnum.StringEditQuantity),
@@ -235,7 +386,6 @@ class TrainingResource(Schema):
         links=["https://schema.org/description"],
     )
 
-    # --- Hidden “index mirror” subsections (repeating) ---
     instructional_method_terms = SubSection(section_def=InstructionalMethodTerm, repeats=True)
     educational_level_terms = SubSection(section_def=EducationalLevelTerm, repeats=True)
     learning_resource_type_terms = SubSection(section_def=LearningResourceTypeTerm, repeats=True)
@@ -244,7 +394,12 @@ class TrainingResource(Schema):
     subject_terms = SubSection(section_def=SubjectTerm, repeats=True)
     keyword_terms = SubSection(section_def=KeywordTerm, repeats=True)
 
-    # Optional debug/info
+    relations = SubSection(
+        section_def=TrainingResourceRelation,
+        repeats=True,
+        description="Add one or more relationships to other TrainingResource entries.",
+    )
+
     message = Quantity(type=str, a_eln=ELNAnnotation(component=ELNComponentEnum.StringEditQuantity))
 
     def _sync_terms(self) -> None:
@@ -266,10 +421,22 @@ class TrainingResource(Schema):
     def normalize(self, archive: "EntryArchive", logger: "BoundLogger") -> None:
         super().normalize(archive, logger)
 
-        if self.identifier:
-            self.name = self.identifier
+        self.instructional_method = _normalize_enum_list(self.instructional_method)
+        self.educational_level = _normalize_enum_list(self.educational_level)
+        self.learning_resource_type = _normalize_enum_list(self.learning_resource_type)
+        self.format = _normalize_enum_list(self.format)
+        self.license = _normalize_enum_list(self.license)
+        self.subject = _normalize_enum_list(self.subject)
+        self.keyword = _normalize_free_list(self.keyword)
 
         self._sync_terms()
+
+        if self.relations:
+            for rel in self.relations:
+                try:
+                    rel.normalize(archive, logger)
+                except Exception as e:
+                    logger.warning("relation_normalize_failed", error=str(e))
 
         logger.info("TrainingResource.normalize", parameter=getattr(configuration, "parameter", None))
         self.message = f"Indexed {len(self.keyword_terms)} keywords."
