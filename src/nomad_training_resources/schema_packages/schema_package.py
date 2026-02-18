@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 from nomad.config import config
 from nomad.datamodel.data import ArchiveSection, Schema
 from nomad.datamodel.metainfo.annotations import ELNAnnotation, ELNComponentEnum
+from nomad.datamodel.results import ELN, Results
 from nomad.metainfo import Datetime, MEnum, Quantity, SchemaPackage, Section, SubSection
 
 configuration = config.get_plugin_entry_point(
@@ -19,15 +20,14 @@ configuration = config.get_plugin_entry_point(
 
 m_package = SchemaPackage()
 
-# Controlled vocabularies
-INSTRUCTIONAL_METHODS = ["Tutorial", "HowTo", "Explanation", "Reference", "Undefined"]
+INSTRUCTIONAL_METHODS = ["Tutorial", "How To", "Explanation", "Reference", "Undefined"]
 EDUCATIONAL_LEVELS = ["Beginner", "Intermediate", "Advanced", "Undefined"]
 LEARNING_RESOURCE_TYPES = [
-    "FAIRmatTutorial",
-    "NOMADDocumentation",
-    "GitRepo",
-    "NOMADExamples",
-    "SelfLearning",
+    "FAIRmat Tutorial",
+    "NOMAD Documentation",
+    "Git Repo",
+    "NOMAD Examples",
+    "Self Learning",
     "Undefined",
 ]
 FORMATS = [
@@ -61,7 +61,6 @@ SUBJECTS = [
     "Undefined",
 ]
 
-# Relation types and resolution status values
 RELATION_TYPES = [
     "sameAs",
     "isPartOf",
@@ -87,7 +86,6 @@ RELATION_STATUS = [
 
 
 def _unique_clean(values: Optional[Iterable[str]]) -> List[str]:
-    """De-dup, strip, drop empty/None; keep order."""
     out: List[str] = []
     for v in values or []:
         if v is None:
@@ -102,12 +100,6 @@ def _unique_clean(values: Optional[Iterable[str]]) -> List[str]:
 
 
 def _normalize_enum_list(values: Optional[Iterable[str]]) -> List[str]:
-    """
-    Enforce:
-      - uniqueness
-      - if empty -> ['Undefined']
-      - if contains anything besides Undefined -> remove Undefined
-    """
     cleaned = _unique_clean(values)
     if not cleaned:
         return ["Undefined"]
@@ -117,7 +109,6 @@ def _normalize_enum_list(values: Optional[Iterable[str]]) -> List[str]:
 
 
 def _normalize_free_list(values: Optional[Iterable[str]]) -> List[str]:
-    """Uniqueness only (no Undefined rule)."""
     return _unique_clean(values)
 
 
@@ -125,21 +116,12 @@ _YOUTUBE_VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 def _canonicalize_youtube_url(url: str) -> Optional[str]:
-    """
-    Canonicalize YouTube URLs to a single stable form.
-
-    - Video:    https://www.youtube.com/watch?v=VIDEO_ID
-    - Playlist: https://www.youtube.com/playlist?list=PLAYLIST_ID
-
-    If the URL is not recognized as a YouTube video/playlist URL, return None.
-    """
     if url is None:
         return None
     s = url.strip()
     if s == "":
         return None
 
-    # Accept URLs without scheme if users paste e.g. "youtu.be/..."
     if not (s.startswith("http://") or s.startswith("https://")):
         if (
             s.startswith("youtu.be/")
@@ -168,30 +150,23 @@ def _canonicalize_youtube_url(url: str) -> Optional[str]:
     qs = parse_qs(u.query)
     path = u.path or ""
 
-    # Playlist id (list=...)
     playlist_id = None
     if "list" in qs and qs["list"]:
         playlist_id = (qs["list"][0] or "").strip() or None
 
-    # Video id
     video_id = None
-
-    # watch?v=VIDEO_ID
     if "v" in qs and qs["v"]:
         video_id = (qs["v"][0] or "").strip() or None
 
-    # youtu.be/VIDEO_ID
     if video_id is None and "youtu.be" in host:
         seg = path.strip("/").split("/")[0] if path.strip("/") else ""
         video_id = seg.strip() or None
 
-    # /shorts/ID, /embed/ID, /live/ID, /v/ID
     if video_id is None:
         parts = [p for p in path.split("/") if p]
         if len(parts) >= 2 and parts[0] in {"shorts", "embed", "live", "v"}:
             video_id = (parts[1] or "").strip() or None
 
-    # Validate video id shape if present
     if video_id is not None and not _YOUTUBE_VIDEO_ID_RE.match(video_id):
         video_id = None
 
@@ -205,13 +180,6 @@ def _canonicalize_youtube_url(url: str) -> Optional[str]:
 
 
 def _canonicalize_identifier(url: Optional[str]) -> Optional[str]:
-    """
-    Canonicalize identifiers for stable indexing and matching.
-
-    Currently:
-      - YouTube video/playlist URLs are canonicalized.
-      - Non-YouTube URLs are left unchanged except for trimming whitespace.
-    """
     if url is None:
         return None
     s = url.strip()
@@ -225,7 +193,6 @@ def _canonicalize_identifier(url: Optional[str]) -> Optional[str]:
     return s
 
 
-# Repeated subsections used for indexing list-like values in Apps
 class InstructionalMethodTerm(ArchiveSection):
     m_def = Section(a_eln={"hide": ["value"]})
     value = Quantity(type=MEnum(INSTRUCTIONAL_METHODS))
@@ -481,6 +448,13 @@ class TrainingResource(Schema):
         description="Add one or more keywords.",
     )
 
+    tags = Quantity(
+        type=str,
+        shape=["*"],
+        description="Add a tag that can be used for search.",
+        a_eln=ELNAnnotation(component=ELNComponentEnum.StringEditQuantity),
+    )
+
     title = Quantity(
         type=str,
         a_eln=ELNAnnotation(component=ELNComponentEnum.StringEditQuantity),
@@ -509,7 +483,6 @@ class TrainingResource(Schema):
     message = Quantity(type=str, a_eln=ELNAnnotation(component=ELNComponentEnum.StringEditQuantity))
 
     def _sync_terms(self) -> None:
-        """Mirror list-quantities into repeated subsections for search indexing."""
         self.instructional_method_terms = [
             InstructionalMethodTerm(value=v) for v in _unique_clean(self.instructional_method)
         ]
@@ -527,8 +500,21 @@ class TrainingResource(Schema):
     def normalize(self, archive: "EntryArchive", logger: "BoundLogger") -> None:
         super().normalize(archive, logger)
 
-        # Canonicalize identifier URLs (YouTube video/playlist) so the stored value is unique and indexable.
         self.identifier = _canonicalize_identifier(self.identifier)
+
+        self.tags = _unique_clean(getattr(self, "tags", None))
+        if getattr(self, "tags", None):
+            if not archive.results:
+                archive.results = Results(eln=ELN())
+            if not archive.results.eln:
+                archive.results.eln = ELN()
+            if archive.results.eln.tags is None:
+                archive.results.eln.tags = []
+            tags = self.tags
+            if isinstance(tags, list):
+                archive.results.eln.tags.extend(tags)
+            else:
+                archive.results.eln.tags.append(tags)
 
         self.instructional_method = _normalize_enum_list(self.instructional_method)
         self.educational_level = _normalize_enum_list(self.educational_level)
@@ -547,7 +533,10 @@ class TrainingResource(Schema):
                 except Exception as e:
                     logger.warning("relation_normalize_failed", error=str(e))
 
-        logger.info("TrainingResource.normalize", parameter=getattr(configuration, "parameter", None))
+        logger.info(
+            "TrainingResource.normalize",
+            parameter=getattr(configuration, "parameter", None),
+        )
         self.message = f"Indexed {len(self.keyword_terms)} keywords."
 
 
