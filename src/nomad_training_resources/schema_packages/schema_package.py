@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Iterable, List, Optional
+from urllib.parse import parse_qs, urlencode, urlparse
 
 if TYPE_CHECKING:
     from nomad.datamodel.datamodel import EntryArchive
@@ -119,6 +121,110 @@ def _normalize_free_list(values: Optional[Iterable[str]]) -> List[str]:
     return _unique_clean(values)
 
 
+_YOUTUBE_VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+
+def _canonicalize_youtube_url(url: str) -> Optional[str]:
+    """
+    Canonicalize YouTube URLs to a single stable form.
+
+    - Video:    https://www.youtube.com/watch?v=VIDEO_ID
+    - Playlist: https://www.youtube.com/playlist?list=PLAYLIST_ID
+
+    If the URL is not recognized as a YouTube video/playlist URL, return None.
+    """
+    if url is None:
+        return None
+    s = url.strip()
+    if s == "":
+        return None
+
+    # Accept URLs without scheme if users paste e.g. "youtu.be/..."
+    if not (s.startswith("http://") or s.startswith("https://")):
+        if (
+            s.startswith("youtu.be/")
+            or s.startswith("www.youtube.com/")
+            or s.startswith("youtube.com/")
+            or s.startswith("m.youtube.com/")
+            or s.startswith("music.youtube.com/")
+        ):
+            s = "https://" + s
+        else:
+            return None
+
+    try:
+        u = urlparse(s)
+    except Exception:
+        return None
+
+    host = (u.netloc or "").lower()
+    if not host:
+        return None
+
+    is_youtube = ("youtube.com" in host) or ("youtu.be" in host)
+    if not is_youtube:
+        return None
+
+    qs = parse_qs(u.query)
+    path = u.path or ""
+
+    # Playlist id (list=...)
+    playlist_id = None
+    if "list" in qs and qs["list"]:
+        playlist_id = (qs["list"][0] or "").strip() or None
+
+    # Video id
+    video_id = None
+
+    # watch?v=VIDEO_ID
+    if "v" in qs and qs["v"]:
+        video_id = (qs["v"][0] or "").strip() or None
+
+    # youtu.be/VIDEO_ID
+    if video_id is None and "youtu.be" in host:
+        seg = path.strip("/").split("/")[0] if path.strip("/") else ""
+        video_id = seg.strip() or None
+
+    # /shorts/ID, /embed/ID, /live/ID, /v/ID
+    if video_id is None:
+        parts = [p for p in path.split("/") if p]
+        if len(parts) >= 2 and parts[0] in {"shorts", "embed", "live", "v"}:
+            video_id = (parts[1] or "").strip() or None
+
+    # Validate video id shape if present
+    if video_id is not None and not _YOUTUBE_VIDEO_ID_RE.match(video_id):
+        video_id = None
+
+    if video_id:
+        return f"https://www.youtube.com/watch?{urlencode({'v': video_id})}"
+
+    if playlist_id:
+        return f"https://www.youtube.com/playlist?{urlencode({'list': playlist_id})}"
+
+    return None
+
+
+def _canonicalize_identifier(url: Optional[str]) -> Optional[str]:
+    """
+    Canonicalize identifiers for stable indexing and matching.
+
+    Currently:
+      - YouTube video/playlist URLs are canonicalized.
+      - Non-YouTube URLs are left unchanged except for trimming whitespace.
+    """
+    if url is None:
+        return None
+    s = url.strip()
+    if s == "":
+        return s
+
+    yt = _canonicalize_youtube_url(s)
+    if yt is not None:
+        return yt
+
+    return s
+
+
 # Repeated subsections used for indexing list-like values in Apps
 class InstructionalMethodTerm(ArchiveSection):
     m_def = Section(a_eln={"hide": ["value"]})
@@ -217,7 +323,7 @@ class TrainingResourceRelation(ArchiveSection):
             self.resolution_message = "Target resource selected manually."
             return
 
-        target_id = (self.target_identifier or "").strip()
+        target_id = _canonicalize_identifier(self.target_identifier) or ""
         if not target_id:
             self.resolution_status = "identifier_missing"
             self.resolution_message = (
@@ -420,6 +526,9 @@ class TrainingResource(Schema):
 
     def normalize(self, archive: "EntryArchive", logger: "BoundLogger") -> None:
         super().normalize(archive, logger)
+
+        # Canonicalize identifier URLs (YouTube video/playlist) so the stored value is unique and indexable.
+        self.identifier = _canonicalize_identifier(self.identifier)
 
         self.instructional_method = _normalize_enum_list(self.instructional_method)
         self.educational_level = _normalize_enum_list(self.educational_level)
