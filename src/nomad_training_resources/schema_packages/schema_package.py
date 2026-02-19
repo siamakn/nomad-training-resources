@@ -108,6 +108,17 @@ def _normalize_enum_list(values: Optional[Iterable[str]]) -> List[str]:
     return cleaned
 
 
+def _normalize_enum_list_client(values: Optional[Iterable[str]]) -> List[str]:
+    cleaned = _unique_clean(values)
+    if not cleaned:
+        return []
+    if "Undefined" in cleaned:
+        if len(cleaned) == 1:
+            return []
+        return [v for v in cleaned if v != "Undefined"]
+    return cleaned
+
+
 def _normalize_free_list(values: Optional[Iterable[str]]) -> List[str]:
     return _unique_clean(values)
 
@@ -512,6 +523,21 @@ class TrainingResource(Schema):
         elif self.entry_name is None and archive.metadata.entry_name:
             self.entry_name = archive.metadata.entry_name.split(".")[0].replace("_", " ")
 
+    def _has_meaningful_content_for_defaulting(self) -> bool:
+        if isinstance(self.identifier, str) and self.identifier.strip():
+            return True
+        if isinstance(self.title, str) and self.title.strip():
+            return True
+        if isinstance(self.description, str) and self.description.strip():
+            return True
+        if _unique_clean(self.keyword):
+            return True
+        if _unique_clean(self.tags):
+            return True
+        if self.relations:
+            return True
+        return False
+
     def normalize(self, archive: "EntryArchive", logger: "BoundLogger") -> None:
         super().normalize(archive, logger)
 
@@ -529,12 +555,25 @@ class TrainingResource(Schema):
                 archive.results.eln.tags = []
             archive.results.eln.tags.extend(self.tags)
 
-        self.instructional_method = _normalize_enum_list(self.instructional_method)
-        self.educational_level = _normalize_enum_list(self.educational_level)
-        self.learning_resource_type = _normalize_enum_list(self.learning_resource_type)
-        self.format = _normalize_enum_list(self.format)
-        self.license = _normalize_enum_list(self.license)
-        self.subject = _normalize_enum_list(self.subject)
+        from nomad.datamodel.context import ClientContext
+
+        fill_defaults = (not isinstance(archive.m_context, ClientContext)) and self._has_meaningful_content_for_defaulting()
+
+        if fill_defaults:
+            self.instructional_method = _normalize_enum_list(self.instructional_method)
+            self.educational_level = _normalize_enum_list(self.educational_level)
+            self.learning_resource_type = _normalize_enum_list(self.learning_resource_type)
+            self.format = _normalize_enum_list(self.format)
+            self.license = _normalize_enum_list(self.license)
+            self.subject = _normalize_enum_list(self.subject)
+        else:
+            self.instructional_method = _normalize_enum_list_client(self.instructional_method)
+            self.educational_level = _normalize_enum_list_client(self.educational_level)
+            self.learning_resource_type = _normalize_enum_list_client(self.learning_resource_type)
+            self.format = _normalize_enum_list_client(self.format)
+            self.license = _normalize_enum_list_client(self.license)
+            self.subject = _normalize_enum_list_client(self.subject)
+
         self.keyword = _normalize_free_list(self.keyword)
 
         self._sync_terms()

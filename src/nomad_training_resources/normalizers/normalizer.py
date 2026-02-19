@@ -62,9 +62,11 @@ def _preclean_enum_list(value: Any) -> Any:
     cleaned = _dedupe_keep_order(cleaned)
 
     if not cleaned:
-        return ["Undefined"]
+        return []
+
     if "Undefined" in cleaned and len(cleaned) > 1:
         cleaned = [v for v in cleaned if v != "Undefined"]
+
     return cleaned
 
 
