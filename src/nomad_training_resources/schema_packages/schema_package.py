@@ -325,10 +325,11 @@ class TrainingResourceRelation(ArchiveSection):
             schema_qn = "nomad_training_resources.schema_packages.schema_package.TrainingResource"
             query = {f"data.identifier#{schema_qn}": target_id}
 
+            max_candidates = 20
             result = search(
                 owner="visible",
                 query=query,
-                pagination=MetadataPagination(page_size=2),
+                pagination=MetadataPagination(page_size=max_candidates),
                 user_id=getattr(archive.metadata.main_author, "user_id", None),
             )
 
@@ -342,10 +343,33 @@ class TrainingResourceRelation(ArchiveSection):
                 return
 
             if total > 1:
+                candidates = []
+                lines = []
+                for hit in (result.data or []):
+                    entry_id = hit.get("entry_id")
+                    entry_name = hit.get("entry_name")
+                    if not entry_name:
+                        entry_name = (hit.get("metadata") or {}).get("entry_name")
+                    candidates.append({"entry_id": entry_id, "entry_name": entry_name})
+                    label = entry_name if entry_name else "<no entry_name>"
+                    lines.append(f"- {entry_id}: {label}")
+
+                shown = len(lines)
+                suffix = f" (showing {shown} of {total})" if total > shown else ""
+
                 self.resolution_status = "identifier_ambiguous"
                 self.resolution_message = (
                     "Multiple TrainingResources found with that identifier URL. "
                     "Please select the correct one with the pen."
+                    f"\nMatches{suffix}:\n" + "\n".join(lines)
+                )
+
+                logger.warning(
+                    "relation_identifier_ambiguous",
+                    target_identifier=target_id,
+                    total=total,
+                    shown=shown,
+                    candidates=candidates,
                 )
                 return
 
@@ -526,6 +550,8 @@ class TrainingResource(Schema):
     def _has_meaningful_content_for_defaulting(self) -> bool:
         if isinstance(self.identifier, str) and self.identifier.strip():
             return True
+        if isinstance(self.entry_name, str) and self.entry_name.strip():
+            return True
         if isinstance(self.title, str) and self.title.strip():
             return True
         if isinstance(self.description, str) and self.description.strip():
@@ -546,14 +572,16 @@ class TrainingResource(Schema):
         self.identifier = _canonicalize_identifier(self.identifier)
 
         self.tags = _unique_clean(getattr(self, "tags", None))
-        if getattr(self, "tags", None):
+        if self.tags:
             if not archive.results:
                 archive.results = Results(eln=ELN())
             if not archive.results.eln:
                 archive.results.eln = ELN()
-            if archive.results.eln.tags is None:
-                archive.results.eln.tags = []
-            archive.results.eln.tags.extend(self.tags)
+            existing = _unique_clean(getattr(archive.results.eln, "tags", None))
+            for t in self.tags:
+                if t not in existing:
+                    existing.append(t)
+            archive.results.eln.tags = existing
 
         from nomad.datamodel.context import ClientContext
 
