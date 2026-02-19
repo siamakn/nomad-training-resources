@@ -370,11 +370,12 @@ class TrainingResource(Schema):
         }
     )
 
-    name = Quantity(
+    entry_name = Quantity(
         type=str,
         a_eln=ELNAnnotation(component=ELNComponentEnum.StringEditQuantity),
-        description="Human-readable name for this resource (editable).",
+        description="Entry name (synchronized with NOMAD metadata entry_name).",
     )
+
     identifier = Quantity(
         type=str,
         a_eln=ELNAnnotation(component=ELNComponentEnum.URLEditQuantity),
@@ -480,7 +481,10 @@ class TrainingResource(Schema):
         description="Add one or more relationships to other TrainingResource entries.",
     )
 
-    message = Quantity(type=str, a_eln=ELNAnnotation(component=ELNComponentEnum.StringEditQuantity))
+    message = Quantity(
+        type=str,
+        a_eln=ELNAnnotation(component=ELNComponentEnum.StringEditQuantity),
+    )
 
     def _sync_terms(self) -> None:
         self.instructional_method_terms = [
@@ -497,8 +501,21 @@ class TrainingResource(Schema):
         self.subject_terms = [SubjectTerm(value=v) for v in _unique_clean(self.subject)]
         self.keyword_terms = [KeywordTerm(value=v) for v in _unique_clean(self.keyword)]
 
+    def _sync_entry_name(self, archive: "EntryArchive") -> None:
+        if not getattr(archive, "metadata", None):
+            return
+        if archive.data != self:
+            return
+
+        if self.entry_name:
+            archive.metadata.entry_name = self.entry_name
+        elif self.entry_name is None and archive.metadata.entry_name:
+            self.entry_name = archive.metadata.entry_name.split(".")[0].replace("_", " ")
+
     def normalize(self, archive: "EntryArchive", logger: "BoundLogger") -> None:
         super().normalize(archive, logger)
+
+        self._sync_entry_name(archive)
 
         self.identifier = _canonicalize_identifier(self.identifier)
 
@@ -510,11 +527,7 @@ class TrainingResource(Schema):
                 archive.results.eln = ELN()
             if archive.results.eln.tags is None:
                 archive.results.eln.tags = []
-            tags = self.tags
-            if isinstance(tags, list):
-                archive.results.eln.tags.extend(tags)
-            else:
-                archive.results.eln.tags.append(tags)
+            archive.results.eln.tags.extend(self.tags)
 
         self.instructional_method = _normalize_enum_list(self.instructional_method)
         self.educational_level = _normalize_enum_list(self.educational_level)
