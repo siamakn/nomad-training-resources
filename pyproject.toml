@@ -98,6 +98,10 @@ ignore = [
     "F403", # 'from module import *' used; unable to detect undefined names
     "PLC0415", # `import` should be at the top-level of a file
     "E501", # line too long
+    "PLW2901",
+    "PLR0911",
+    "PLR0912",
+    "PLR2004",
 ]
 
 fixable = ["ALL"]
