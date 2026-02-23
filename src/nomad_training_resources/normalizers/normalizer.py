@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from nomad.datamodel.datamodel import EntryArchive
@@ -10,20 +10,20 @@ from nomad.normalizing import Normalizer
 from nomad_training_resources.schema_packages.schema_package import TrainingResource
 
 configuration = config.get_plugin_entry_point(
-    "nomad_training_resources.normalizers:training_resources_normalizer"
+    'nomad_training_resources.normalizers:training_resources_normalizer'
 )
 
 ENUM_LIST_FIELDS = [
-    "instructional_method",
-    "educational_level",
-    "learning_resource_type",
-    "format",
-    "license",
-    "subject",
+    'instructional_method',
+    'educational_level',
+    'learning_resource_type',
+    'format',
+    'license',
+    'subject',
 ]
 
 
-def _as_list(value: Any) -> Optional[List[Any]]:
+def _as_list(value: Any) -> list[Any] | None:
     if value is None:
         return None
     if isinstance(value, list):
@@ -33,8 +33,8 @@ def _as_list(value: Any) -> Optional[List[Any]]:
     return [value]
 
 
-def _dedupe_keep_order(values: List[str]) -> List[str]:
-    out: List[str] = []
+def _dedupe_keep_order(values: list[str]) -> list[str]:
+    out: list[str] = []
     for v in values:
         if v not in out:
             out.append(v)
@@ -46,7 +46,7 @@ def _preclean_enum_list(value: Any) -> Any:
     if raw_list is None:
         return None
 
-    cleaned: List[str] = []
+    cleaned: list[str] = []
     for v in raw_list:
         if v is None:
             continue
@@ -55,8 +55,8 @@ def _preclean_enum_list(value: Any) -> Any:
         s = v.strip()
         if not s:
             continue
-        if s.lower() == "undefined":
-            s = "Undefined"
+        if s.lower() == 'undefined':
+            s = 'Undefined'
         cleaned.append(s)
 
     cleaned = _dedupe_keep_order(cleaned)
@@ -64,16 +64,16 @@ def _preclean_enum_list(value: Any) -> Any:
     if not cleaned:
         return []
 
-    if "Undefined" in cleaned and len(cleaned) > 1:
-        cleaned = [v for v in cleaned if v != "Undefined"]
+    if 'Undefined' in cleaned and len(cleaned) > 1:
+        cleaned = [v for v in cleaned if v != 'Undefined']
 
     return cleaned
 
 
 class NewNormalizer(Normalizer):
-    def normalize(self, archive: "EntryArchive", logger: "BoundLogger") -> None:
+    def normalize(self, archive: 'EntryArchive', logger: 'BoundLogger') -> None:
         super().normalize(archive, logger)
-        logger.info("NewNormalizer.normalize", parameter=configuration.parameter)
+        logger.info('NewNormalizer.normalize', parameter=configuration.parameter)
 
         data = archive.data
         if not isinstance(data, TrainingResource):
