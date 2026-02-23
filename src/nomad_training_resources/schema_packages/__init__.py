@@ -11,7 +11,7 @@ class NewSchemaPackageEntryPoint(SchemaPackageEntryPoint):
         return m_package
 
 
-schema_package_entry_point = NewSchemaPackageEntryPoint(
-    name='NewSchemaPackage',
+training_resources_schema = NewSchemaPackageEntryPoint(
+    name='training_resources_schema',
     description='New schema package entry point configuration.',
 )

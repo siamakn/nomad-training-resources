@@ -11,7 +11,7 @@ class NewNormalizerEntryPoint(NormalizerEntryPoint):
         return NewNormalizer(**self.model_dump())
 
 
-normalizer_entry_point = NewNormalizerEntryPoint(
-    name='NewNormalizer',
+training_resources_normalizer = NewNormalizerEntryPoint(
+    name='training_resources_normalizer',
     description='New normalizer entry point configuration.',
 )

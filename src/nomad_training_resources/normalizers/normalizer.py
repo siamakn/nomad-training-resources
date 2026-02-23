@@ -10,7 +10,7 @@ from nomad.normalizing import Normalizer
 from nomad_training_resources.schema_packages.schema_package import TrainingResource
 
 configuration = config.get_plugin_entry_point(
-    "nomad_training_resources.normalizers:normalizer_entry_point"
+    "nomad_training_resources.normalizers:training_resources_normalizer"
 )
 
 ENUM_LIST_FIELDS = [

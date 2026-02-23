@@ -17,7 +17,6 @@ from nomad.config.models.ui import (
 
 SCHEMA = "nomad_training_resources.schema_packages.schema_package.TrainingResource"
 
-# Search quantities (index-friendly mirror subsections)
 Q_SUBJECT = f"data.subject_terms.value#{SCHEMA}"
 Q_KEYWORD = f"data.keyword_terms.value#{SCHEMA}"
 Q_INSTRUCTIONAL_METHOD = f"data.instructional_method_terms.value#{SCHEMA}"
@@ -31,7 +30,6 @@ Q_IDENTIFIER = f"data.identifier#{SCHEMA}"
 Q_DATE_CREATED = f"data.date_created#{SCHEMA}"
 Q_DATE_MODIFIED = f"data.date_modified#{SCHEMA}"
 
-# Column display (show first two values from repeating mirror subsections)
 C_EDUCATIONAL_LEVEL = f"data.educational_level_terms[0:2].value#{SCHEMA}"
 C_RESOURCE_TYPE = f"data.learning_resource_type_terms[0:2].value#{SCHEMA}"
 C_FORMAT = f"data.format_terms[0:2].value#{SCHEMA}"
@@ -63,7 +61,6 @@ training_resources_app = App(
             Q_LICENSE,
             Q_DATE_CREATED,
             Q_DATE_MODIFIED,
-            # Ensure the column expressions are available to the results table
             C_EDUCATIONAL_LEVEL,
             C_RESOURCE_TYPE,
             C_FORMAT,
@@ -206,7 +203,7 @@ training_resources_app = App(
 
 
 training_resources_app_entry_point = AppEntryPoint(
-    name="training_resources",
+    name="training_resources_app",
     description="App for exploring training resources defined by the TrainingResource schema.",
     app=training_resources_app,
 )

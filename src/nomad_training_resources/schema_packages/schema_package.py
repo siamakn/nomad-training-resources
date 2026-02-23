@@ -15,7 +15,7 @@ from nomad.datamodel.results import ELN, Results
 from nomad.metainfo import Datetime, MEnum, Quantity, SchemaPackage, Section, SubSection
 
 configuration = config.get_plugin_entry_point(
-    "nomad_training_resources.schema_packages:schema_package_entry_point"
+    "nomad_training_resources.schema_packages:training_resources_schema"
 )
 
 m_package = SchemaPackage()
