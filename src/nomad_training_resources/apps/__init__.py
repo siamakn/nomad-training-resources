@@ -10,7 +10,6 @@ from nomad.config.models.ui import (
     MenuItemTerms,
     MenuItemVisibility,
     SearchQuantities,
-    WidgetHistogram,
     WidgetTerms,
 )
 
@@ -29,6 +28,11 @@ Q_TITLE = f"data.title#{SCHEMA}"
 Q_IDENTIFIER = f"data.identifier#{SCHEMA}"
 Q_DATE_CREATED = f"data.date_created#{SCHEMA}"
 Q_DATE_MODIFIED = f"data.date_modified#{SCHEMA}"
+
+# Column display (show first two values from repeating mirror subsections)
+C_EDUCATIONAL_LEVEL = f"data.educational_level_terms[0:2].value#{SCHEMA}"
+C_RESOURCE_TYPE = f"data.learning_resource_type_terms[0:2].value#{SCHEMA}"
+C_FORMAT = f"data.format_terms[0:2].value#{SCHEMA}"
 
 
 training_resources_app = App(
@@ -57,22 +61,20 @@ training_resources_app = App(
             Q_LICENSE,
             Q_DATE_CREATED,
             Q_DATE_MODIFIED,
-            "authors.name",
+            # Ensure the column expressions are available to the results table
+            C_EDUCATIONAL_LEVEL,
+            C_RESOURCE_TYPE,
+            C_FORMAT,
         ]
     ),
     columns=[
-        Column(quantity=Q_TITLE, label="Title", selected=True),
-        Column(quantity=Q_IDENTIFIER, label="Identifier (URL)", selected=False),
-        Column(quantity=Q_SUBJECT, label="Subject", selected=True),
-        Column(quantity=Q_KEYWORD, label="Keyword", selected=True),
-        Column(quantity=Q_INSTRUCTIONAL_METHOD, label="Instructional method", selected=True),
-        Column(quantity=Q_EDUCATIONAL_LEVEL, label="Educational level", selected=True),
-        Column(quantity=Q_RESOURCE_TYPE, label="Resource type", selected=True),
-        Column(quantity=Q_FORMAT, label="Format", selected=True),
-        Column(quantity=Q_LICENSE, label="License", selected=True),
-        Column(quantity=Q_DATE_CREATED, label="Date created", selected=False),
-        Column(quantity=Q_DATE_MODIFIED, label="Date modified", selected=False),
-        Column(quantity="authors.name", label="Authors", selected=False),
+        Column(search_quantity=Q_TITLE, label="Title", selected=True),
+        Column(search_quantity=Q_IDENTIFIER, label="Identifier (URL)", selected=False),
+        Column(search_quantity=C_EDUCATIONAL_LEVEL, label="Educational level", selected=True),
+        Column(search_quantity=C_RESOURCE_TYPE, label="Resource type", selected=True),
+        Column(search_quantity=C_FORMAT, label="Format", selected=True),
+        Column(search_quantity=Q_DATE_CREATED, label="Date created", selected=False),
+        Column(search_quantity=Q_DATE_MODIFIED, label="Date modified", selected=False),
     ],
     menu=Menu(
         title="Filters",
@@ -130,7 +132,6 @@ training_resources_app = App(
                         n_bins=40,
                         autorange=True,
                     ),
-                    MenuItemTerms(search_quantity="authors.name", title="Author", show_input=True, options=20),
                     MenuItemVisibility(title="Visibility"),
                 ],
             ),
@@ -138,70 +139,52 @@ training_resources_app = App(
     ),
     dashboard=Dashboard(
         widgets=[
-            WidgetHistogram(
-                title="Resources over time",
-                x=AxisQuantity(search_quantity=Q_DATE_CREATED),
-                n_bins=40,
-                autorange=True,
-                layout={
-                    "md": Layout(w=12, h=4, x=0, y=0, minW=6, minH=3),
-                    "lg": Layout(w=12, h=4, x=0, y=0, minW=6, minH=3),
-                },
-            ),
             WidgetTerms(
                 title="Subject",
                 search_quantity=Q_SUBJECT,
                 layout={
-                    "md": Layout(w=6, h=4, x=0, y=4, minW=3, minH=3),
-                    "lg": Layout(w=6, h=4, x=0, y=4, minW=3, minH=3),
+                    "md": Layout(w=6, h=4, x=0, y=0, minW=3, minH=3),
+                    "lg": Layout(w=6, h=4, x=0, y=0, minW=3, minH=3),
                 },
             ),
             WidgetTerms(
                 title="Keyword",
                 search_quantity=Q_KEYWORD,
                 layout={
-                    "md": Layout(w=6, h=4, x=6, y=4, minW=3, minH=3),
-                    "lg": Layout(w=6, h=4, x=6, y=4, minW=3, minH=3),
+                    "md": Layout(w=6, h=4, x=6, y=0, minW=3, minH=3),
+                    "lg": Layout(w=6, h=4, x=6, y=0, minW=3, minH=3),
                 },
             ),
             WidgetTerms(
                 title="Instructional method",
                 search_quantity=Q_INSTRUCTIONAL_METHOD,
                 layout={
-                    "md": Layout(w=6, h=4, x=0, y=8, minW=3, minH=3),
-                    "lg": Layout(w=6, h=4, x=0, y=8, minW=3, minH=3),
+                    "md": Layout(w=6, h=4, x=0, y=4, minW=3, minH=3),
+                    "lg": Layout(w=6, h=4, x=0, y=4, minW=3, minH=3),
                 },
             ),
             WidgetTerms(
                 title="Educational level",
                 search_quantity=Q_EDUCATIONAL_LEVEL,
                 layout={
-                    "md": Layout(w=6, h=4, x=6, y=8, minW=3, minH=3),
-                    "lg": Layout(w=6, h=4, x=6, y=8, minW=3, minH=3),
+                    "md": Layout(w=6, h=4, x=6, y=4, minW=3, minH=3),
+                    "lg": Layout(w=6, h=4, x=6, y=4, minW=3, minH=3),
                 },
             ),
             WidgetTerms(
                 title="Resource type",
                 search_quantity=Q_RESOURCE_TYPE,
                 layout={
-                    "md": Layout(w=6, h=4, x=0, y=12, minW=3, minH=3),
-                    "lg": Layout(w=6, h=4, x=0, y=12, minW=3, minH=3),
+                    "md": Layout(w=6, h=4, x=0, y=8, minW=3, minH=3),
+                    "lg": Layout(w=6, h=4, x=0, y=8, minW=3, minH=3),
                 },
             ),
             WidgetTerms(
                 title="Format",
                 search_quantity=Q_FORMAT,
                 layout={
-                    "md": Layout(w=6, h=4, x=6, y=12, minW=3, minH=3),
-                    "lg": Layout(w=6, h=4, x=6, y=12, minW=3, minH=3),
-                },
-            ),
-            WidgetTerms(
-                title="License",
-                search_quantity=Q_LICENSE,
-                layout={
-                    "md": Layout(w=12, h=4, x=0, y=16, minW=6, minH=3),
-                    "lg": Layout(w=12, h=4, x=0, y=16, minW=6, minH=3),
+                    "md": Layout(w=6, h=4, x=6, y=8, minW=3, minH=3),
+                    "lg": Layout(w=6, h=4, x=6, y=8, minW=3, minH=3),
                 },
             ),
         ],
