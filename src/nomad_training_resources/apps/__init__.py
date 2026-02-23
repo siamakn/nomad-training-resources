@@ -1,7 +1,6 @@
 from nomad.config.models.plugins import AppEntryPoint
 from nomad.config.models.ui import (
     App,
-    AxisQuantity,
     Column,
     Dashboard,
     Layout,
@@ -9,6 +8,9 @@ from nomad.config.models.ui import (
     MenuItemHistogram,
     MenuItemTerms,
     MenuItemVisibility,
+    Rows,
+    RowActions,
+    RowActionURL,
     SearchQuantities,
     WidgetTerms,
 )
@@ -76,6 +78,17 @@ training_resources_app = App(
         Column(search_quantity=Q_DATE_CREATED, label="Date created", selected=False),
         Column(search_quantity=Q_DATE_MODIFIED, label="Date modified", selected=False),
     ],
+    rows=Rows(
+        actions=RowActions(
+            items=[
+                RowActionURL(
+                    path="data.identifier",
+                    icon="launch",
+                    description="Open identifier URL",
+                )
+            ]
+        )
+    ),
     menu=Menu(
         title="Filters",
         items=[
