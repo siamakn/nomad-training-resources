@@ -1,3 +1,5 @@
+from types import ModuleType
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,6 +13,23 @@ from nomad_training_resources.schema_packages.schema_package import (
 
 @pytest.fixture
 def mock_search():
+    import nomad
+
+    if 'nomad.search' not in sys.modules:
+        search_mod = ModuleType('nomad.search')
+        sys.modules['nomad.search'] = search_mod
+        setattr(nomad, 'search', search_mod)
+    else:
+        search_mod = sys.modules['nomad.search']
+
+    if not hasattr(search_mod, 'MetadataPagination'):
+
+        class DummyPagination:
+            def __init__(self, page_size=None, **kwargs):
+                self.page_size = page_size
+
+        setattr(search_mod, 'MetadataPagination', DummyPagination)
+
     with patch('nomad.search.search', create=True) as mock:
         yield mock
 
