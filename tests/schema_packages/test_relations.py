@@ -1,5 +1,5 @@
-from types import ModuleType
 import sys
+from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -78,7 +78,9 @@ def test_relation_resolution_success(mock_search):
 
     res.normalize(archive, None)
 
-    assert rel.target_resource.m_proxy_value == '../uploads/upload1/archive/entry1#/data'
+    assert (
+        rel.target_resource.m_proxy_value == '../uploads/upload1/archive/entry1#/data'
+    )
     assert rel.resolution_status == 'resolved_from_identifier'
     assert 'entry_id=entry1' in rel.resolution_message
 
