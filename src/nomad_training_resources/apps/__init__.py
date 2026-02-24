@@ -236,3 +236,5 @@ training_resources_app_entry_point = AppEntryPoint(
     description='App for exploring training resources defined by the TrainingResource schema.',
     app=training_resources_app,
 )
+
+app_entry_point = training_resources_app_entry_point

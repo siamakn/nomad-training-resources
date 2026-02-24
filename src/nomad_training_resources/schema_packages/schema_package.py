@@ -635,13 +635,15 @@ class TrainingResource(Schema):
                 try:
                     rel.normalize(archive, logger)
                 except Exception as e:
-                    logger.warning('relation_normalize_failed', error=str(e))
+                    if logger is not None:
+                        logger.warning("relation_normalize_failed", error=str(e))
 
-        logger.info(
-            'TrainingResource.normalize',
-            parameter=getattr(configuration, 'parameter', None),
-        )
-        self.message = f'Indexed {len(self.keyword_terms)} keywords.'
+        if logger is not None:
+            logger.info(
+                "TrainingResource.normalize",
+                parameter=getattr(configuration, "parameter", None),
+            )
+        self.message = f"Indexed {len(self.keyword_terms)} keywords."
 
 
 m_package.__init_metainfo__()
