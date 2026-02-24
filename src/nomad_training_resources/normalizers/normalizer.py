@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from nomad.datamodel.datamodel import EntryArchive
@@ -9,129 +9,75 @@ from nomad.normalizing import Normalizer
 
 from nomad_training_resources.schema_packages.schema_package import TrainingResource
 
-# Load the normalizer configuration from the plugin entry point.
 configuration = config.get_plugin_entry_point(
-    "nomad_training_resources.normalizers:normalizer_entry_point"
+    'nomad_training_resources.normalizers:training_resources_normalizer'
 )
 
-
-def _is_empty(value) -> bool:
-    """
-    Return True if a quantity should be treated as 'missing/empty'.
-
-    - None
-    - empty list / tuple
-    - list / tuple with only None / empty strings
-    - empty / whitespace-only string
-    """
-    if value is None:
-        return True
-
-    # Strings
-    if isinstance(value, str):
-        return value.strip() == ""
-
-    # Lists / tuples (we only have lists)
-    if isinstance(value, (list, tuple)):
-        if len(value) == 0:
-            return True
-        # All elements empty / None / whitespace
-        return all(
-            (v is None) or (isinstance(v, str) and v.strip() == "")
-            for v in value
-        )
-
-    # Anything else: treat as "has some value"
-    return False
+ENUM_LIST_FIELDS = [
+    'instructional_method',
+    'educational_level',
+    'learning_resource_type',
+    'format',
+    'license',
+    'subject',
+]
 
 
-def _clean_undefined(value):
-    """
-    Normalize placeholder values like 'undefined' / 'Undefined' so that
-    `_is_empty` can treat them as missing.
-
-    - For strings: 'undefined' (any case) -> None
-    - For lists/tuples: remove all 'undefined'-like items
-    """
+def _as_list(value: Any) -> list[Any] | None:
     if value is None:
         return None
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
 
-    if isinstance(value, str):
-        return None if value.strip().lower() == "undefined" else value
 
-    if isinstance(value, (list, tuple)):
-        cleaned = [
-            v
-            for v in value
-            if not (isinstance(v, str) and v.strip().lower() == "undefined")
-        ]
-        return cleaned
+def _dedupe_keep_order(values: list[str]) -> list[str]:
+    out: list[str] = []
+    for v in values:
+        if v not in out:
+            out.append(v)
+    return out
 
-    return value
+
+def _preclean_enum_list(value: Any) -> Any:
+    raw_list = _as_list(value)
+    if raw_list is None:
+        return None
+
+    cleaned: list[str] = []
+    for v in raw_list:
+        if v is None:
+            continue
+        if not isinstance(v, str):
+            v = str(v)
+        s = v.strip()
+        if not s:
+            continue
+        if s.lower() == 'undefined':
+            s = 'Undefined'
+        cleaned.append(s)
+
+    cleaned = _dedupe_keep_order(cleaned)
+
+    if not cleaned:
+        return []
+
+    if 'Undefined' in cleaned and len(cleaned) > 1:
+        cleaned = [v for v in cleaned if v != 'Undefined']
+
+    return cleaned
 
 
 class NewNormalizer(Normalizer):
-    """
-    Plugin normalizer for the nomad_training_resources package.
-
-    It:
-    - logs that it ran (using the template configuration),
-    - sets 'Undefined' for controlled-vocabulary fields when they are empty
-      or contain only 'undefined'-like markers.
-    """
-
-    def normalize(self, archive: "EntryArchive", logger: "BoundLogger") -> None:
+    def normalize(self, archive: 'EntryArchive', logger: 'BoundLogger') -> None:
         super().normalize(archive, logger)
-        print('here i am mashti')
-
-        logger.info("NewNormalizer.normalize", parameter=configuration.parameter)
+        logger.info('NewNormalizer.normalize', parameter=configuration.parameter)
 
         data = archive.data
         if not isinstance(data, TrainingResource):
             return
 
-        subjects = _clean_undefined(getattr(data, "subject", None))
-        if _is_empty(subjects):
-            data.subject = ["Undefined"]
-        else:
-            data.subject = subjects
-
-        keywords = _clean_undefined(getattr(data, "keywords", None))
-        if _is_empty(keywords):
-            data.keywords = ["Undefined"]
-        else:
-            data.keywords = keywords
-
-        instructional_methods = _clean_undefined(
-            getattr(data, "instructional_method", None)
-        )
-        if _is_empty(instructional_methods):
-            data.instructional_method = ["Undefined"]
-        else:
-            data.instructional_method = instructional_methods
-
-        educational_levels = _clean_undefined(
-            getattr(data, "educational_level", None)
-        )
-        if _is_empty(educational_levels):
-            data.educational_level = ["Undefined"]
-        else:
-            data.educational_level = educational_levels
-
-        lrt = _clean_undefined(getattr(data, "learning_resource_type", None))
-        if _is_empty(lrt):
-            data.learning_resource_type = "Undefined"
-        else:
-            data.learning_resource_type = lrt
-
-        fmt = _clean_undefined(getattr(data, "format", None))
-        if _is_empty(fmt):
-            data.format = "Undefined"
-        else:
-            data.format = fmt
-
-        lic = _clean_undefined(getattr(data, "license", None))
-        if _is_empty(lic):
-            data.license = "Undefined"
-        else:
-            data.license = lic
+        for field in ENUM_LIST_FIELDS:
+            setattr(data, field, _preclean_enum_list(getattr(data, field, None)))

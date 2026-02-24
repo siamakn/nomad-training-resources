@@ -98,6 +98,10 @@ ignore = [
     "F403", # 'from module import *' used; unable to detect undefined names
     "PLC0415", # `import` should be at the top-level of a file
     "E501", # line too long
+    "PLW2901",
+    "PLR0911",
+    "PLR0912",
+    "PLR2004",
 ]
 
 fixable = ["ALL"]
@@ -129,11 +133,10 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [project.entry-points.'nomad.plugin']
-training_resources = "nomad_training_resources.apps:training_resources_app_entry_point"
-training_jsonld_parser = "nomad_training_resources.parsers:training_jsonld_parser"
-parser_entry_point = "nomad_training_resources.parsers:training_jsonld_parser"
-schema_package_entry_point = "nomad_training_resources.schema_packages:schema_package_entry_point"
-normalizer_entry_point = "nomad_training_resources.normalizers:normalizer_entry_point"
+training_resources_app = "nomad_training_resources.apps:training_resources_app_entry_point"
+parser_entry_point = "nomad_training_resources.parsers:parser_entry_point"
+training_resources_schema = "nomad_training_resources.schema_packages:training_resources_schema"
+training_resources_normalizer = "nomad_training_resources.normalizers:training_resources_normalizer"
 
 
 
